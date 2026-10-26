@@ -1,5 +1,5 @@
 // Offline-Unterstützung: erst Netz (damit Updates sofort ankommen), sonst gespeicherte Version.
-const CACHE = "abnehm-begleiter-v1";
+const CACHE = "abnehm-begleiter-v2";
 const FILES = ["./", "index.html", "style.css", "app.js", "foods.js", "monster.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {

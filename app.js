@@ -191,6 +191,14 @@
     });
     return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((x) => x.f);
   }
+  // passt das Lebensmittel zu allen Suchwörtern? (z. B. "Skyr Ehrmann" passt nicht vollständig zum allgemeinen "Skyr")
+  function matchesAll(f, query) {
+    const STOP = ["mit", "und", "von", "vom", "der", "die", "das", "den", "dem", "aus", "auf", "in", "im", "zum", "zur", "ohne"];
+    const q = norm(query).split(" ").filter((w) => w.length > 1 && !STOP.includes(w));
+    const hay = norm(f.name + " " + f.brand);
+    const words = hay.split(" ");
+    return q.every((tok) => { const st = stem(tok); return words.some((w) => w === tok || stem(w) === st || w.startsWith(st)) || (st.length >= 4 && hay.includes(st)); });
+  }
   function recentFoods(limit = 20) {
     const seen = new Set(), out = [];
     Object.keys(S.days).sort().reverse().forEach((k) => {
@@ -276,7 +284,7 @@
   }
 
   // ================= Open Food Facts =================
-  const OFF_FIELDS = "code,product_name,product_name_de,generic_name_de,brands,nutriments,serving_quantity,serving_size,quantity";
+  const OFF_FIELDS = "code,product_name,product_name_de,generic_name_de,brands,nutriments,serving_quantity,serving_size,quantity,countries_tags";
   function offToProduct(o) {
     const n = o.nutriments || {};
     let k = n["energy-kcal_100g"];
@@ -306,11 +314,34 @@
     j.product.code = j.product.code || code;
     return offToProduct(j.product);
   }
-  // Die Textsuche von Open Food Facts ist öfter überlastet (Fehler 503); die Barcode-Abfrage ist zuverlässig.
+  // Die Textsuche von Open Food Facts lehnt viele Anfragen sofort ab (Fehler 503), klappt aber meist beim
+  // nächsten Versuch. Deshalb: mehrere Versuche mit kurzer Pause, und Ergebnisse für den Tag merken.
+  const searchCache = {};
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function offSearch(q) {
-    const j = await fetchJson(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=20&fields=${OFF_FIELDS}`, 15000);
-    const seen = new Set();
-    return (j.products || []).map(offToProduct).filter((p) => p && !seen.has(p.key) && seen.add(p.key));
+    const key = norm(q);
+    if (searchCache[key]) return searchCache[key];
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=15&fields=${OFF_FIELDS}`;
+    const waits = [0, 600, 1000, 1500, 2000, 2500, 3000, 4000];
+    let lastErr;
+    for (const w of waits) {
+      if (w) await sleep(w);
+      if (!navigator.onLine) throw new Error("offline");
+      try {
+        const j = await fetchJson(url, 15000);
+        const seen = new Set();
+        // passende Treffer zuerst, dann Produkte aus Deutschland
+        const res = (j.products || [])
+          .map((o) => ({ p: offToProduct(o), de: (o.countries_tags || []).includes("en:germany") }))
+          .filter((x) => x.p && !seen.has(x.p.key) && seen.add(x.p.key))
+          .map((x, i) => ({ p: x.p, s: (matchesAll(foodFromProduct(x.p), q) ? 4 : 0) + (x.de ? 2 : 0) - i * 0.01 }))
+          .sort((a, b) => b.s - a.s)
+          .map((x) => x.p);
+        searchCache[key] = res;
+        return res;
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
   }
   function rememberProduct(pr) {
     if (!S.products[pr.key]) { S.products[pr.key] = pr; save(); }
@@ -645,7 +676,7 @@
       });
       function rowHtml(r, i) {
         let body;
-        if (r.loading) body = `<div class="small muted"><span class="spinner"></span> Suche in der Produktdatenbank…</div>`;
+        if (r.loading) body = `<div class="small muted"><span class="spinner"></span> Suche in der Produktdatenbank… das kann ein paar Sekunden dauern.</div>`;
         else if (!r.sel) body = `<div class="small muted">${r.tried ? "Nichts gefunden." : "Nicht in deiner Liste."}</div>
             <div class="row">${r.tried ? "" : `<button class="btn ghost" data-act="online" data-i="${i}">Online suchen</button>`}<button class="btn ghost" data-act="own" data-i="${i}">Selbst eingeben</button></div>`;
         else {
@@ -679,7 +710,7 @@
           r.offMap = res;
           if (fs.length) { r.cands = fs.concat(r.cands.filter((f) => !fs.find((x) => x.ref === f.ref))); r.sel = fs[0]; r.amount = resolveAmount(r.p, fs[0]); }
         } catch (e) {
-          toast(navigator.onLine ? "Die Produktdatenbank ist gerade überlastet. Versuch es in einer Minute nochmal." : "Du bist offline. Online-Suche geht gerade nicht.");
+          toast(navigator.onLine ? "Die Produktdatenbank antwortet gerade nicht. Tipp gleich nochmal auf „Online suchen“ oder scanne den Barcode." : "Du bist offline. Online-Suche geht gerade nicht.");
         }
         r.loading = false; paint();
       }
@@ -732,8 +763,8 @@
         afterLog(chosen.length === 1 ? "Eingetragen" : chosen.length + " Sachen eingetragen");
       }
       paint();
-      // was lokal gar nicht gefunden wurde, sofort online suchen (nacheinander, um die Datenbank zu schonen)
-      (async () => { for (let i = 0; i < rows.length; i++) if (!rows[i].sel) await online(i); })();
+      // was lokal nicht (vollständig) gefunden wurde, z. B. mit Markenname, gleich online suchen (nacheinander)
+      (async () => { for (let i = 0; i < rows.length; i++) if (!rows[i].sel || !matchesAll(rows[i].sel, rows[i].p.query)) await online(i); })();
     }
     return sh;
   }
