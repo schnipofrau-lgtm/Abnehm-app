@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Abnehm-Begleiter</title>
+  <meta name="theme-color" content="#f4ecff">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@600;700;800;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app" class="app"></div>
+
+  <nav class="nav" id="nav" hidden>
+    <div class="nav-inner">
+      <button class="tab" data-tab="heute" aria-current="page">
+        <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Heute
+      </button>
+      <button class="tab" data-tab="gewicht">
+        <svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M5 16l5-5 4 3 6-7"/></svg>Gewicht
+      </button>
+      <button class="fab" id="fab" aria-label="Essen eintragen">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="tab" data-tab="woche">
+        <svg viewBox="0 0 24 24"><rect x="4" y="12" width="3.5" height="8" rx="1"/><rect x="10.25" y="7" width="3.5" height="13" rx="1"/><rect x="16.5" y="10" width="3.5" height="10" rx="1"/></svg>Woche
+      </button>
+      <button class="tab" data-tab="gerichte">
+        <svg viewBox="0 0 24 24"><path d="M4 11h16a8 8 0 0 1-16 0z"/><path d="M9 7c0-2 2-2 2-4M14 7c0-2 2-2 2-4"/></svg>Gerichte
+      </button>
+    </div>
+  </nav>
+
+  <div id="layer"></div>
+
+  <script src="foods.js"></script>
+  <script src="monster.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
